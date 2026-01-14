@@ -1,0 +1,38 @@
+cabal-version:       2.4
+name:                flang
+version:             0.1.0.0
+synopsis:            Formal Languages and Automata Library
+description:         A pedagogical library for exploring Formal Languages, Regular Expressions, and Automata.
+                     Features include Brzozowski derivatives with ACUI normalization and FSM conversion via Arden's Lemma.
+license:             BSD-3-Clause
+author:              Todd Wilson
+maintainer:          twilson@csufresno.edu
+category:            Algorithms, Math, Education
+build-type:          Simple
+
+source-repository head
+  type:     git
+  location: https://github.com/lambdacalculator/flang
+
+library
+  exposed-modules:     FLang
+                     , FLang.Utils
+                     , FLang.LOL
+                     , FLang.Language
+                     , FLang.RegExp
+                     , FLang.FSM
+                     , FLang.Algorithms
+  hs-source-dirs:      src
+  build-depends:       base >= 4.7 && < 5
+                     , array
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+
+test-suite flang-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base >= 4.7 && < 5
+                     , flang
+                     , QuickCheck
+  default-language:    Haskell2010
