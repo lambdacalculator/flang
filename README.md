@@ -116,24 +116,31 @@ cabal test
 
 You don't need to write your code inside this repository! You can keep your assignments separate while still using the FLang library.
 
-### Method 1: The `cabal.project` File (Recommended)
+### Method for Assignments (The "Environment File" Method)
 
-1.  Create a folder for your assignment (e.g., `my-assignment`).
-2.  Inside `my-assignment`, create a file named `cabal.project` with the following content:
+This is the most robust way to work on assignments. It creates a configuration file that lets you use plain `ghci` with FLang pre-loaded.
+
+1.  **Create your folder**: Make a directory for your assignment (e.g., `my-assignment`) alongside your `flang` clone.
+2.  **Point to FLang**: Inside `my-assignment`, create a file named `cabal.project` containing:
     ```
     packages: .
-              ../path/to/flang
+              ../flang
     ```
-    *(Replace `../path/to/flang` with the actual relative or absolute path to where you cloned FLang)*
-3.  In your assignment's code, simply `import FLang`.
-4.  Run `cabal repl` inside `my-assignment`, and FLang will be loaded automatically!
+    *(Adjust `../flang` if your directories are organized differently. Windows users: use forward slashes `/` or double backslashes `\\`)*
+3.  **Generate Environment**: Open your terminal in `my-assignment` and run:
+    ```bash
+    cabal install --lib flang --package-env .
+    ```
+    *(This creates a hidden `.ghc.environment...` file)*
+4.  **Work**: Now you can simply run `ghci`!
+    ```bash
+    $ ghci
+    GHCi> import FLang
+    GHCi> :load Assignment.hs
+    ```
 
-### Method 2: Cabal Install (Global)
+**Troubleshooting**:
+*   If you see "can't find file", make sure you are in the correct directory.
+*   If `import FLang` fails, delete the `.ghc.environment` file and run step 3 again.
+*   **Do not** use `cabal repl flang` (this opens the library itself, not your assignment). Just use `ghci`.
 
-You can verify the library is installable globally (though we recommend Method 1 for modifiability):
-
-```bash
-cd flang
-cabal install --lib
-```
-Then you can use `cabal repl --build-depends=flang` anywhere.
