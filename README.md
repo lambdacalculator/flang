@@ -144,3 +144,16 @@ This is the most robust way to work on assignments. It creates a configuration f
 *   If `import FLang` fails, delete the `.ghc.environment` file and run step 3 again.
 *   **Do not** use `cabal repl flang` (this opens the library itself, not your assignment). Just use `ghci`.
 
+## 🔄 Updating the Library
+
+If your instructor pushes updates to FLang, getting them is easy:
+
+1.  Navigate to your `flang` folder: `cd flang`
+2.  Pull the latest changes: `git pull`
+3.  (Optional) If new files were added, you might need to refresh your environment in your assignment folder:
+    ```bash
+    cd ../my-assignment
+    rm .ghc.environment*  # Delete the old environment file
+    cabal install --lib flang --package-env .
+    ```
+
