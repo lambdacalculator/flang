@@ -43,7 +43,6 @@ module FLang.RegExp
 
 import FLang.LOL (lol, eps)
 import FLang.Language hiding (strings)
-import qualified FLang.Language as Lang
 import FLang.Utils (splits)
 
 ---- Traditional regular expressions
@@ -62,10 +61,10 @@ data RegExp s = Zero                 -- ^ Empty language
 newtype Compact s = Compact (RegExp s)
 
 instance (Show s) => Show (Compact s) where    -- use precedence to minimize parentheses
-  showsPrec d (Compact r) = sp d r where
-    sp d Zero          = showString "0"
-    sp d One           = showString "1"
-    sp d (Let c)       = shows c
+  showsPrec p (Compact r) = sp p r where
+    sp _ Zero          = showString "0"
+    sp _ One           = showString "1"
+    sp _ (Let c)       = shows c
     sp d (Union r1 r2) = showParen (d > 6) $  -- prec(Union) = 6
                          sp 6 r1 .
                          showString "+" .
@@ -73,7 +72,7 @@ instance (Show s) => Show (Compact s) where    -- use precedence to minimize par
     sp d (Cat r1 r2)   = showParen (d > 7) $  -- prec(Cat) = 7
                          sp 7 r1 .
                          sp 7 r2
-    sp d (Star r1)     = sp 9 r1 .     -- prec(Star) = 8
+    sp _ (Star r1)     = sp 9 r1 .     -- prec(Star) = 8
                          showString "*"
 
 
@@ -85,12 +84,12 @@ toRE w = go w [] where
   go [] [r]              = r     -- Normal termination: one result on stack
   ----------- Error cases -----------
   go [] []        = error "Empty input"
-  go ('+':xs) []  = error "No operands for +"
-  go ('.':xs) []  = error "No operands for ."
-  go ('*':xs) []  = error "No operand for *"
-  go ('+':xs) [r] = error $ "Missing operand for + (other operand: " ++
+  go ('+':_) []  = error "No operands for +"
+  go ('.':_) []  = error "No operands for ."
+  go ('*':_) []  = error "No operand for *"
+  go ('+':_) [r] = error $ "Missing operand for + (other operand: " ++
                     show (Compact r) ++ ")"
-  go ('.':xs) [r] = error $ "Missing operand for . (other operand: " ++
+  go ('.':_) [r] = error $ "Missing operand for . (other operand: " ++
                     show (Compact r) ++ ")"
   go [] rs        = error $ "Dangling operands: " ++
                     show (map Compact $ reverse rs)
@@ -200,7 +199,7 @@ finite (w:ws) = Union (onestr w) (finite ws)
 bypnep :: RegExp s -> Maybe (RegExp s)
 bypnep Zero = Nothing
 bypnep One = Just Zero -- nep(1) = 0 because 1 = 1 + 0
-bypnep (Let a) = Nothing
+bypnep (Let _) = Nothing
 bypnep (Union r1 r2) = case (bypnep r1, bypnep r2) of
                          (Nothing,  Nothing)  -> Nothing
                          (Nothing,  Just r2') -> Just $ Union r1 r2'
@@ -226,8 +225,8 @@ nep r = case bypnep r of
 -- This preserves the existing structure as much as possible, for pedagogical demonstration.
 -- Warning: repeated application on terms like (a*)* may lead to infinite growth.
 lq :: (Eq s) => s -> RegExp s -> RegExp s
-lq s Zero = Zero
-lq s One = Zero
+lq _ Zero = Zero
+lq _ One = Zero
 lq s (Let c) = if s == c then One else Zero
 lq s (Union r1 r2) = Union (lq s r1) (lq s r2)
 lq s (Cat r1 r2) | byp r1 = Union (Cat (lq s r1) r2) (lq s r2)
@@ -238,8 +237,8 @@ lq s (Star r1) = Cat (lq s r1) (Star r1)
 -- Uses smart constructors (<+>, <.>) to apply ACUI normalization, guaranteeing
 -- a finite set of derivatives for any regular expression.
 (<\>) :: (Eq s) => s -> RegExp s -> RegExp s
-c <\> Zero        = Zero
-c <\> One         = Zero
+_ <\> Zero        = Zero
+_ <\> One         = Zero
 c <\> (Let x)     = if c == x then One else Zero
 c <\> (Union p q) = (c <\> p) <+> (c <\> q)
 c <\> (Cat p q)   = ((c <\> p) <.> q) <+> (if byp p then (c <\> q) else Zero)
@@ -294,15 +293,15 @@ match1 (Star r) w = null w ||
 match2 :: (Eq s) => RegExp s -> [s] -> Bool
 match2 r w = m [r] False w where
   m :: (Eq s) => [RegExp s] -> Bool -> [s] -> Bool  -- for c, False is 0, True is 1
-  m [] c w = not c && null w
-  m (Zero : rs) c w = False
-  m (One : rs) c w = not c && m rs c w
+  m [] c cs = not c && null cs
+  m (Zero : _) _ _ = False
+  m (One : rs) c cs = not c && m rs c cs
   
-  m (Let a : rs) c [] = False
-  m (Let a : rs) c (x:xs) = a == x && m rs False xs
-  m (Union r1 r2 : rs) c w = m (r1:rs) c w || m (r2:rs) c w
-  m (Cat r1 r2 : rs) c w = m (r1:r2:rs) c w || c && byp r1 && m (r2:rs) c w
-  m (Star r1 : rs) c w = not c && m rs c w || m (r1:Star r1:rs) True w
+  m (Let _ : _) _ [] = False
+  m (Let a : rs) _ (x:xs) = a == x && m rs False xs
+  m (Union r1 r2 : rs) c cs = m (r1:rs) c cs || m (r2:rs) c cs
+  m (Cat r1 r2 : rs) c cs = m (r1:r2:rs) c cs || c && byp r1 && m (r2:rs) c cs
+  m (Star r1 : rs) c cs = not c && m rs c cs || m (r1:Star r1:rs) True cs
 
 ---- Matching algorithm 3 
 
@@ -315,8 +314,8 @@ data MProg s = Epsilon          -- Match the empty string
 -- Run a matching program on a string
 runmp :: (Eq s) => MProg s -> [s] -> Bool
 runmp Epsilon w = null w
-runmp Fail w = False
-runmp (Read a mp) [] = False
+runmp Fail _ = False
+runmp (Read _ _) [] = False
 runmp (Read a mp) (x:xs) = a == x && runmp mp xs
 runmp (Try mp1 mp2) w = runmp mp1 w || runmp mp2 w
 
@@ -326,7 +325,7 @@ compile r = go r Epsilon where
   -- go r mp is the program that matches r and then runs mp on what's left
   -- uses nep in Star case to avoid infinite loops
   go :: (Eq s) => RegExp s -> MProg s -> MProg s
-  go Zero mp = Fail
+  go Zero _ = Fail
   go One mp = mp
   go (Let a) mp = Read a mp
   go (Union r1 r2) mp = Try (go r1 mp) (go r2 mp)

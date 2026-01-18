@@ -12,13 +12,11 @@ module FLang.Algorithms
   , solve
   ) where
 
-import FLang.Language (HasSigma(sigma))
+import FLang.Language (HasSigma(sigma), merge)
 import FLang.FSM
-import FLang.RegExp (RegExp(..), numLets, (<+>), (<.>), mkStar, (<\>), byp)
+import FLang.RegExp (RegExp(..), (<+>), (<.>), mkStar)
 import qualified FLang.RegExp as RE
-import FLang.Utils (norm, cart, diff, eq2part, uclosure, overlap)
-import FLang.Language (merge)
-import Data.List (nub, foldl')
+import FLang.Utils (norm, cart, diff, eq2part, uclosure)
 
 
 
@@ -30,61 +28,58 @@ import Data.List (nub, foldl')
 -- The states are integers. A fresh state count is maintained during construction.
 thompson :: (Eq s) => RegExp s -> EFSM s Int
 thompson r = (ss, d, es, fs) where
-  (n, ss, fs_idx, d_func, es) = build r 0
+  (_, ss, fs_idx, d, es) = build r 0
 
   fs q = q `elem` fs_idx
-  d = d_final
-  (_, _, _, d_final, _) = build r 0 
   
   -- Internal build function returning (next_state_index, start_states, final_states, transition_fn, epsilon_moves)
   build :: (Eq s) => RegExp s -> Int -> (Int, [Int], [Int], Int -> s -> [Int], [(Int,Int)])
   build Zero k = (k, [], [], \_ _ -> [], [])
   build One k = (k+1, [k], [k], \_ _ -> [], []) -- One accepts empty string
-  build (Let c) k = (k+2, [k], [k+1], d, []) where
-    d q a = if q == k && a == c then [k+1] else []
-  build (Union r1 r2) k = (n2, ss1 ++ ss2, fs1 ++ fs2, d, es1 ++ es2) where
+  build (Let c) k = (k+2, [k], [k+1], d', []) where
+    d' q a = if q == k && a == c then [k+1] else []
+  build (Union r1 r2) k = (n2, ss1 ++ ss2, fs1 ++ fs2, d', es1 ++ es2) where
     (n1, ss1, fs1, d1, es1) = build r1 k
     (n2, ss2, fs2, d2, es2) = build r2 n1
-    d q a = if q < n1 then d1 q a else d2 q a 
-  build (Cat r1 r2) k = (n2, ss1, fs2, d, es) where
+    d' q a = if q < n1 then d1 q a else d2 q a 
+  build (Cat r1 r2) k = (n2, ss1, fs2, d', es_new) where
     (n1, ss1, fs1, d1, es1) = build r1 k
     (n2, ss2, fs2, d2, es2) = build r2 n1
-    d q a = if q < n1 then d1 q a else d2 q a 
-    es = es1 ++ cart fs1 ss2 ++ es2 
-  build (Star r1) k = (n1, [k], [k], d, es) where
+    d' q a = if q < n1 then d1 q a else d2 q a 
+    es_new = es1 ++ cart fs1 ss2 ++ es2 
+  build (Star r1) k = (n1, [k], [k], d', es_new) where
     (n1, ss1, fs1, d1, es1) = build r1 (k+1)
-    d q a = if q == k then [] else d1 q a
-    es = cart [k] ss1 ++ es1 ++ cart fs1 [k]
+    d' q a = if q == k then [] else d1 q a
+    es_new = cart [k] ss1 ++ es1 ++ cart fs1 [k]
 
 -- | Glushkov construction: converts a RegExp to a Non-deterministic FSM (NFSM) without epsilon transitions.
 glushkov :: (Eq s) => RegExp s -> NFSM s Int
 glushkov r = (ss, d_final, fs) where
-  n = RE.numLets r
-  (0, xs, b, d_final) = rcat r n [n] (\_ _ -> [])
+  n_total = RE.numLets r
+  (_, xs, b, d_final) = rcat r n_total [n_total] (\_ _ -> [])
   
-  ss = if b then xs ++ [n] else xs
-  fs q = q == n
+  ss = if b then xs ++ [n_total] else xs
+  fs q = q == n_total
 
   -- Helper: rcat
   rcat :: (Eq s) => RegExp s -> Int -> [Int] -> (Int -> s -> [Int]) -> (Int, [Int], Bool, (Int -> s -> [Int]))
-  rcat Zero j ss d = (j, [], False, d)
-  rcat One j ss d = (j, [], True, d)
-  rcat (Let c) j ss d = (i, [i], False, d') where
+  rcat Zero j _ d' = (j, [], False, d')
+  rcat One j _ d' = (j, [], True, d')
+  rcat (Let c) j ss' d' = (i, [i], False, d'') where
     i = j - 1
-    d' q a = if q == i && a == c then ss else d q a
-  rcat (Union r1 r2) j ss d = (n1, xs1 ++ xs2, b1 || b2, d') where
-    (n2, xs2, b2, d2) = rcat r2 j ss d
-    (n1, xs1, b1, d1) = rcat r1 n2 ss d2
-    d' q a = if q < n2 then d1 q a else d2 q a
-  rcat (Cat r1 r2) j ss d = (n1, xs, b1 && b2, d') where
-    (n2, xs2, b2, d2) = rcat r2 j ss d
-    ss2 = if b2 then merge xs2 ss else xs2
+    d'' q a = if q == i && a == c then ss' else d' q a
+  rcat (Union r1 r2) j ss' d' = (n1, xs1 ++ xs2, b1 || b2, d'') where
+    (n2, xs2, b2, d2) = rcat r2 j ss' d'
+    (n1, xs1, b1, d1) = rcat r1 n2 ss' d2
+    d'' q a = if q < n2 then d1 q a else d2 q a
+  rcat (Cat r1 r2) j ss' d' = (n1, xs_final, b1 && b2, d'') where
+    (n2, xs2, b2, d2) = rcat r2 j ss' d'
+    ss2 = if b2 then merge xs2 ss' else xs2
     (n1, xs1, b1, d1) = rcat r1 n2 ss2 d2
-    xs = if b1 then xs1 ++ xs2 else xs1
-    d' q a = if q < n2 then d1 q a else d2 q a
-  rcat (Star r1) j ss d = (n1, xs1, True, d1) where
-    (n1, xs1, _, d1) = rcat r1 j (merge xs1 ss) d
-
+    xs_final = if b1 then xs1 ++ xs2 else xs1
+    d'' q a = if q < n2 then d1 q a else d2 q a
+  rcat (Star r1) j ss' d' = (n1, xs1, True, d1) where
+    (n1, xs1, _, d1) = rcat r1 j (merge xs1 ss') d'
 
 -- | Brzozowski derivative construction: converts a RegExp to a deterministic FSM.
 -- Uses the smart left quotient (<\>) to ensure the state space is finite.
@@ -101,39 +96,39 @@ brzozowski r = (s, d, fs) where
 
 -- Eliminate epsilon moves
 elim_eps :: (HasSigma s, Ord a) => EFSM s a -> NFSM s a
-elim_eps (ss, d, es, fs) = (ss', de, fs) where
+elim_eps (ss, d', es, fs) = (ss', de, fs) where
   close q = uclosure [q] (\x -> [q2 | (q1,q2) <- es, q1 == x])
   ss' = norm $ concatMap close ss
-  de q a = norm $ concatMap close (d q a)
+  de q a = norm $ concatMap close (d' q a)
 
 -- Conversion from NFSM to FSM ("subset construction")
 nfsm_to_fsm :: (HasSigma s, Ord a) => NFSM s a -> FSM s [a]
-nfsm_to_fsm (ss, d, fs) = (ss, hat d, fs') where
+nfsm_to_fsm (ss, d', fs) = (ss, hat d', fs') where
   fs' qs = any fs qs
 
 -- Reverse FSM to a NFSM
 reverseFSM :: (HasSigma s, Ord a) => FSM s a -> NFSM s a
-reverseFSM m@(s, d, fs) = (finals, d', fs') where
+reverseFSM m@(s, d', fs) = (finals, d_rev, fs') where
   states = reachable m
   finals = filter fs states
-  d' q a = [q' | q' <- states, d q' a == q]
+  d_rev q a = [q' | q' <- states, d' q' a == q]
   fs' q = q == s
 
 -- | Machine that accepts the 'op' of the languages accepted by m1 and m2.
 opFSM :: (Ord a, Ord b) => (Bool -> Bool -> Bool) -> FSM s a -> FSM s b -> FSM s (a, b)
-opFSM op (s1, d1, fs1) (s2, d2, fs2) = ((s1, s2), d, fs) where
-  d (q1, q2) a = (d1 q1 a, d2 q2 a)
+opFSM op (s1, d1, fs1) (s2, d2, fs2) = ((s1, s2), d', fs) where
+  d' (q1, q2) a = (d1 q1 a, d2 q2 a)
   fs (q1, q2) = fs1 q1 `op` fs2 q2
 
 -- Reachable states of a NFSM
 nreach :: (HasSigma s, Ord a) => NFSM s a -> [a]
-nreach (ss, d, fs) = uclosure ss (\q -> concat $ map (d q) sigma)
+nreach (ss, d', _) = uclosure ss (\q -> concat $ map (d' q) sigma)
 
 -- | Minimization of a deterministic FSM using Moore's partition refinement algorithm.
 -- Implemented via backward reachability on the product machine (finding distinguishable pairs).
 -- This is functionally equivalent to Hopcroft's n log n algorithm but O(n^2) due to fixpoint computation.
 minimize :: (HasSigma s, Ord a) => FSM s a -> FSM s [a]
-minimize m@(s1, d1, fs1) = (s, d, fs) where
+minimize m@(s1, d1, fs1) = (s, d', fs) where
   qs = reachable m
   
   -- 1. Identify distinguishable pairs (differing in finality)
@@ -157,10 +152,10 @@ minimize m@(s1, d1, fs1) = (s, d, fs) where
   
   -- New states are partitions
   s = getBlock s1 partitions
-  d block a = getBlock (d1 (head block) a) partitions
+  d' block a = getBlock (d1 (head block) a) partitions
   fs block = fs1 (head block)
   
-  getBlock q [] = error "State not found in partitions"
+  getBlock _ [] = error "State not found in partitions"
   getBlock q (b:bs) = if q `elem` b then b else getBlock q bs
 
 
@@ -192,7 +187,14 @@ solve ((a11:a1J) : rows) (b1:bs) = x1 : xRest
     -- Note: We use foldr to sum the dot product.
     sum_a1j_xj = foldr (<+>) Zero (zipWith (<.>) a1J xRest)
     x1 = s11 <.> (b1 <+> sum_a1j_xj)
+solve _ _ = error "solve: mismatched or empty system"
 
+-- Helper for finding index of an element
+index :: Eq a => a -> [a] -> Int
+index x (y:ys) 
+  | x == y    = 0
+  | otherwise = 1 + index x ys
+index _ [] = error "State not found in reachable set"
 
 -- | Convert FSM to RegExp.
 -- Assumes the alphabet 'sigma' is provided (via HasSigma instance).
@@ -210,8 +212,3 @@ fsm_to_re m@(s, d, fs) = solution !! index s qs
     final q = if fs q then RE.One else RE.Zero
     
     solution = solve [[coef q1 q2 | q2 <- qs] | q1 <- qs] [final q | q <- qs]
-
-    index x (y:ys) 
-      | x == y    = 0
-      | otherwise = 1 + index x ys
-    index _ [] = error "State not found in reachable set"

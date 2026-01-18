@@ -21,7 +21,7 @@ module FLang.FSM
   ) where
 
 import FLang.Language (HasSigma(sigma))
-import FLang.Utils (uclosure, eq2part, diff, cart, norm, overlap)
+import FLang.Utils (uclosure, norm, overlap)
 import Data.List (intercalate, transpose, foldl')
 import Data.Array (listArray, (!))
 
@@ -67,7 +67,7 @@ type FSM s a = (a, a -> s -> a, a -> Bool)
 
 -- reachable m == the list of states reachable from the start state
 reachable :: (HasSigma s, Ord a) => FSM s a -> [a]
-reachable (s, d, fs) = uclosure [s] (\q -> map (d q) sigma)
+reachable (s, d, _) = uclosure [s] (\q -> map (d q) sigma)
 
 instance (HasSigma s, Show s, Ord a, Show a) => Machine (FSM s a) where
   display m@(s, d, fs) = unlines $
@@ -114,7 +114,8 @@ intify m@(s, d, fs) = (s', d', fs') where
   fs' q = fs (qs !! q)
   arr = listArray ((0,0), (n-1,m_sig-1)) [ind qs (d q a) | q <- qs, a <- sigma]
   d' q a = arr ! (q, ind sigma a)
-  ind (q':qs) q = if q == q' then 0 else 1 + ind qs q
+  ind (q':rs) q = if q == q' then 0 else 1 + ind rs q
+  ind [] _ = error "intify: state not found"
 
 -- | Nondeterministic Finite State Machine.
 -- Defined by a list of start states, a non-deterministic transition function, and a final state predicate.
@@ -122,7 +123,7 @@ type NFSM s a = ([a], a -> s -> [a], a -> Bool)
 
 -- reachable states of NFSM
 nreachable :: (HasSigma s, Ord a) => NFSM s a -> [a]
-nreachable (ss, d, fs) = uclosure ss (\q -> concat $ map (d q) sigma)
+nreachable (ss, d, _) = uclosure ss (\q -> concat $ map (d q) sigma)
 
 instance (HasSigma s, Show s, Ord a, Show a) => Machine (NFSM s a) where
   display m@(ss, d, fs) = unlines $
@@ -169,7 +170,7 @@ nacc' (ss, d, fs) w = any fs (star (hat d) ss w)
 type EFSM s a = ([a], a -> s -> [a], [(a,a)], a -> Bool)
 
 ereachable :: (HasSigma s, Ord a) => EFSM s a -> [a]
-ereachable (ss, d, es, fs) = uclosure ss (\q -> (concat $ map (d q) sigma) ++ [q2 | (q1,q2) <- es, q1==q])
+ereachable (ss, d, es, _) = uclosure ss (\q -> (concat $ map (d q) sigma) ++ [q2 | (q1,q2) <- es, q1==q])
 
 instance (HasSigma s, Show s, Ord a, Show a) => Machine (EFSM s a) where
   display m@(ss, d, es, fs) = unlines $

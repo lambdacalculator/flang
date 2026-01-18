@@ -65,4 +65,4 @@ kstar xs = eps : cat xs (kstar xs)
 strings :: (HasSigma s) => Int -> [[s]]
 strings n = concat [strs i | i <- [0..n]] where
   strs 0 = [[]]
-  strs n = [a:xs | a <- sigma, xs <- strs (n-1)]
+  strs k = [a:xs | a <- sigma, xs <- strs (k-1)]
