@@ -15,9 +15,17 @@ import FLang.LOL
 class (Eq s, Ord s) => HasSigma s where
   sigma :: [s]
 
--- | Default instance for Char, preserving original behavior "ab"
-instance HasSigma Char where
-  sigma = "ab"
+-- | Type for the alphabet {a, b}
+newtype AB = AB Char deriving (Eq, Ord, Show)
+
+instance HasSigma AB where
+  sigma = [AB 'a', AB 'b']
+
+-- | Type for the alphabet {a, b, c}
+newtype ABC = ABC Char deriving (Eq, Ord, Show)
+
+instance HasSigma ABC where
+  sigma = [ABC 'a', ABC 'b', ABC 'c']
 
 -- | Languages over an alphabet 'a', represented as normalized lists of LOLs.
 --

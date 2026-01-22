@@ -12,8 +12,8 @@ diff xs ys = filter (\x -> notElem x ys) xs
 eq2part :: Eq a => [a] -> [(a,a)] -> [[a]]
 eq2part as rs = blocks as where
   blocks [] = []
-  blocks (a:as) = let b = eqclass a
-                  in b : blocks (as `diff` b)
+  blocks (a:rest) = let b = eqclass a
+                  in b : blocks (rest `diff` b)
   eqclass x = [y | (x',y) <- rs, x == x']
 
 
@@ -23,7 +23,7 @@ norm xs = rad $ sort xs where
   rad :: Eq a => [a] -> [a]  -- Remove adjacent duplicates
   rad [] = []
   rad [x] = [x]
-  rad (x:ys@(y:zs)) | x == y = rad ys
+  rad (x:ys@(y:_)) | x == y = rad ys
                     | otherwise = x : rad ys
 
 -- Cartesian product, preserves normalization
@@ -38,8 +38,8 @@ power (x:xs) = let ys = power xs
 
 -- Check whether two normalized lists overlap
 overlap :: Ord a => [a] -> [a] -> Bool
-overlap [] ys = False
-overlap xs [] = False
+overlap [] _ = False
+overlap _ [] = False
 overlap xs@(x:xr) ys@(y:yr) = case compare x y of
                                 LT -> overlap xr ys
                                 EQ -> True
@@ -54,7 +54,8 @@ splits xs = zip (inits xs) (tails xs)
 -- uclosure xs g == smallest set containing xs and closed under g
 uclosure :: Ord a => [a] -> (a -> [a]) -> [a]
 uclosure xs g = sort $ stable $ iterate close (xs, []) where
-  stable ((fr,xs):rest) = if null fr then xs else stable rest
-  close (fr, xs) = (fr', xs') where
-    xs' = fr ++ xs
-    fr' = norm $ filter (`notElem` xs') $ concatMap g fr
+  stable ((fr,qs):rest) = if null fr then qs else stable rest
+  stable [] = error "uclosure: empty list" -- should be impossible with iterate
+  close (fr, qs) = (fr', qs') where
+    qs' = fr ++ qs
+    fr' = norm $ filter (`notElem` qs') $ concatMap g fr

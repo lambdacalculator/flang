@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 -- |
 -- Module      : FLang.RegExp
 -- Description : Regular Expressions with ACUI normalization
@@ -55,7 +56,7 @@ data RegExp s = Zero                 -- ^ Empty language
               | Union (RegExp s) (RegExp s)  -- ^ Union
               | Cat (RegExp s) (RegExp s)    -- ^ Concatenation
               | Star (RegExp s)          -- ^ Kleene star
-              deriving (Show, Eq, Ord) -- Added Ord for insert logic
+              deriving (Show, Eq, Ord, Functor) -- Added Ord for insert logic, Functor for mapping alphabets
 
 -- Compact display form for RegExp
 newtype Compact s = Compact (RegExp s)

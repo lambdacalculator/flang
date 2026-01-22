@@ -13,7 +13,7 @@ lol xs = LOL (length xs) xs
 
 -- Destructor for LOL a (ignores length)
 unlol :: LOL a -> [a]
-unlol (LOL n xs) = xs
+unlol (LOL _ xs) = xs
 
 -- Show instance doesn't print LOL constructor or length
 instance Show a => Show (LOL a) where

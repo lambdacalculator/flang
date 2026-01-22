@@ -47,7 +47,10 @@ Convert regexes to Finite State Machines to visualize them:
 
 ```haskell
 -- Convert regex to FSM using Brzozowski derivatives
-let m = brzozowski r1
+-- Note: We generally use 'Char' for regexes, but algorithms like 'minimize'
+-- require a finite alphabet (HasSigma). We can map chars to the 'AB' type.
+let r_ab = fmap AB r1 
+let m = brzozowski r_ab
 
 -- Convert states to integers for simpler viewing
 let im = intify m
@@ -66,14 +69,15 @@ putStrLn (toDot minM)
 
 ### Parameterized Alphabets
 
-FLang isn't limited to `Char`! You can define your own alphabets using the `HasSigma` typeclass.
+FLang includes built-in types `AB` (alphabet {a,b}) and `ABC` (alphabet {a,b,c}). 
+For custom alphabets, you can define your own using the `HasSigma` typeclass.
 
 ```haskell
--- Define a custom alphabet type for three symbols
-newtype ABC = ABC Char deriving (Eq, Ord, Show)
+-- Define a custom alphabet type for three numeric symbols
+newtype Nums = Nums Char deriving (Eq, Ord, Show)
 
-instance HasSigma ABC where
-  sigma = map ABC "abc"
+instance HasSigma Nums where
+  sigma = map Nums "123"
   
 -- Now you can use algorithms over this alphabet!
 ```

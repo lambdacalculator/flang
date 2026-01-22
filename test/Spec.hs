@@ -5,31 +5,35 @@ import FLang hiding (match3) -- hide to avoid clash if we import explicit
 import FLang.FSM (accept, nacc)
 import FLang.RegExp (match1, match2, compile, runmp, match3)
 import FLang.Algorithms (thompson, glushkov, brzozowski, elim_eps, fsm_to_re, minimize)
+import FLang.Language (AB(..), ABC(..))
 import Test.QuickCheck
 import System.Exit (exitFailure, exitSuccess)
 
 -- Generators
-instance Arbitrary (RegExp Char) where
-  arbitrary = sized arbRegExp
+instance Arbitrary AB where
+  arbitrary = elements [AB 'a', AB 'b']
 
-arbRegExp :: Int -> Gen (RegExp Char)
-arbRegExp 0 = elements [Zero, One, Let 'a', Let 'b']
-arbRegExp n = frequency
+instance Arbitrary (RegExp AB) where
+  arbitrary = sized arbRegExpAB
+
+arbRegExpAB :: Int -> Gen (RegExp AB)
+arbRegExpAB 0 = elements [Zero, One, Let (AB 'a'), Let (AB 'b')]
+arbRegExpAB n = frequency
   [ (1, return Zero)
   , (1, return One)
-  , (2, Let <$> elements "ab")
+  , (2, Let <$> arbitrary)
   , (2, Union <$> sub <*> sub)
   , (2, Cat <$> sub <*> sub)
   , (2, Star <$> sub)
   ]
-  where sub = arbRegExp (n `div` 2)
+  where sub = arbRegExpAB (n `div` 2)
 
 -- Restricted Generator for short properties
-shortGen :: Gen (RegExp Char, [String])
+shortGen :: Gen (RegExp AB, [[AB]])
 shortGen = do
   r <- resize 5 arbitrary 
-  -- Generate small number of short strings over STRICT alphabet "ab"
-  ws <- resize 5 (listOf (resize 5 (listOf (elements "ab"))))
+  -- Generate small number of short strings over STRICT alphabet AB
+  ws <- resize 5 (listOf (resize 5 (listOf arbitrary)))
   return (r, ws)
 
 -- Properties
@@ -80,12 +84,9 @@ prop_roundtrip = forAll shortGen $ \(r, ws) ->
       prog' = compile r'
   in all (\w -> runmp prog' w == runmp prog w) ws
 
--- 7. Custom Alphabet Test
--- Define a custom alphabet {A, B, C}
-newtype ABC = ABC Char deriving (Eq, Ord, Show)
-
-instance HasSigma ABC where
-  sigma = map ABC "abc"
+-- 7. Custom Alphabet Test (ABC)
+instance Arbitrary ABC where
+  arbitrary = elements [ABC 'a', ABC 'b', ABC 'c']
 
 instance Arbitrary (RegExp ABC) where
   arbitrary = sized arbRegExpABC
@@ -95,7 +96,7 @@ arbRegExpABC 0 = elements [Zero, One, Let (ABC 'a'), Let (ABC 'b'), Let (ABC 'c'
 arbRegExpABC n = frequency
   [ (1, return Zero)
   , (1, return One)
-  , (2, Let <$> elements (map ABC "abc"))
+  , (2, Let <$> arbitrary)
   , (2, Union <$> sub <*> sub)
   , (2, Cat <$> sub <*> sub)
   , (2, Star <$> sub)
