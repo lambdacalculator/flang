@@ -6,13 +6,13 @@ module FLang.Algorithms
   , nfsm_to_fsm
   , reverseFSM
   , opFSM
-  , nreach
+  , nreachable
   , minimize
   , fsm_to_re
   , solve
   ) where
 
-import FLang.Language (HasSigma(sigma), merge)
+import FLang.Language (merge)
 import FLang.FSM
 import FLang.RegExp (RegExp(..), (<+>), (<.>), mkStar)
 import qualified FLang.RegExp as RE
@@ -22,18 +22,16 @@ import FLang.Utils (norm, cart, diff, eq2part, uclosure)
 
 ---- Conversions from RegExp to FSM, NFSM, and EFSM ---------------------------
 
--- | Thompson's construction: converts a RegExp to an Epsilon-Nondeterministic FSM (EFSM).
+-- | Thompson's construction: converts a RegExp to an EFSM.
 -- The states are integers. A fresh state count is maintained during construction.
--- | Thompson's construction: converts a RegExp to an Epsilon-Nondeterministic FSM (EFSM).
--- The states are integers. A fresh state count is maintained during construction.
-thompson :: (Eq s) => RegExp s -> EFSM s Int
+thompson :: RegExp -> EFSM Int
 thompson r = (ss, d, es, fs) where
   (_, ss, fs_idx, d, es) = build r 0
 
   fs q = q `elem` fs_idx
   
   -- Internal build function returning (next_state_index, start_states, final_states, transition_fn, epsilon_moves)
-  build :: (Eq s) => RegExp s -> Int -> (Int, [Int], [Int], Int -> s -> [Int], [(Int,Int)])
+  build :: RegExp -> Int -> (Int, [Int], [Int], Int -> Char -> [Int], [(Int,Int)])
   build Zero k = (k, [], [], \_ _ -> [], [])
   build One k = (k+1, [k], [k], \_ _ -> [], []) -- One accepts empty string
   build (Let c) k = (k+2, [k], [k+1], d', []) where
@@ -52,8 +50,8 @@ thompson r = (ss, d, es, fs) where
     d' q a = if q == k then [] else d1 q a
     es_new = cart [k] ss1 ++ es1 ++ cart fs1 [k]
 
--- | Glushkov construction: converts a RegExp to a Non-deterministic FSM (NFSM) without epsilon transitions.
-glushkov :: (Eq s) => RegExp s -> NFSM s Int
+-- | Glushkov construction: converts a RegExp to an NFSM.
+glushkov :: RegExp -> NFSM Int
 glushkov r = (ss, d_final, fs) where
   n_total = RE.numLets r
   (_, xs, b, d_final) = rcat r n_total [n_total] (\_ _ -> [])
@@ -62,7 +60,7 @@ glushkov r = (ss, d_final, fs) where
   fs q = q == n_total
 
   -- Helper: rcat
-  rcat :: (Eq s) => RegExp s -> Int -> [Int] -> (Int -> s -> [Int]) -> (Int, [Int], Bool, (Int -> s -> [Int]))
+  rcat :: RegExp -> Int -> [Int] -> (Int -> Char -> [Int]) -> (Int, [Int], Bool, (Int -> Char -> [Int]))
   rcat Zero j _ d' = (j, [], False, d')
   rcat One j _ d' = (j, [], True, d')
   rcat (Let c) j ss' d' = (i, [i], False, d'') where
@@ -81,11 +79,9 @@ glushkov r = (ss, d_final, fs) where
   rcat (Star r1) j ss' d' = (n1, xs1, True, d1) where
     (n1, xs1, _, d1) = rcat r1 j (merge xs1 ss') d'
 
--- | Brzozowski derivative construction: converts a RegExp to a deterministic FSM.
+-- | Brzozowski derivative construction: converts a RegExp to an FSM.
 -- Uses the smart left quotient (<\>) to ensure the state space is finite.
--- | Brzozowski derivative construction: converts a RegExp to a deterministic FSM.
--- Uses the smart left quotient (<\>) to ensure the state space is finite.
-brzozowski :: (HasSigma s, Eq s) => RegExp s -> FSM s (RegExp s)
+brzozowski :: RegExp -> FSM RegExp
 brzozowski r = (s, d, fs) where
   s = r
   fs = RE.byp
@@ -95,47 +91,43 @@ brzozowski r = (s, d, fs) where
 ---- Algorithms ---------------------------
 
 -- Eliminate epsilon moves
-elim_eps :: (HasSigma s, Ord a) => EFSM s a -> NFSM s a
+elim_eps :: (Ord a) => EFSM a -> NFSM a
 elim_eps (ss, d', es, fs) = (ss', de, fs) where
   close q = uclosure [q] (\x -> [q2 | (q1,q2) <- es, q1 == x])
   ss' = norm $ concatMap close ss
   de q a = norm $ concatMap close (d' q a)
 
 -- Conversion from NFSM to FSM ("subset construction")
-nfsm_to_fsm :: (HasSigma s, Ord a) => NFSM s a -> FSM s [a]
+nfsm_to_fsm :: (Ord a) => NFSM a -> FSM [a]
 nfsm_to_fsm (ss, d', fs) = (ss, hat d', fs') where
   fs' qs = any fs qs
 
 -- Reverse FSM to a NFSM
-reverseFSM :: (HasSigma s, Ord a) => FSM s a -> NFSM s a
-reverseFSM m@(s, d', fs) = (finals, d_rev, fs') where
-  states = reachable m
+reverseFSM :: (Ord a) => [Char] -> FSM a -> NFSM a
+reverseFSM sigma m@(s, d', fs) = (finals, d_rev, fs') where
+  states = reachable sigma m
   finals = filter fs states
   d_rev q a = [q' | q' <- states, d' q' a == q]
   fs' q = q == s
 
 -- | Machine that accepts the 'op' of the languages accepted by m1 and m2.
-opFSM :: (Ord a, Ord b) => (Bool -> Bool -> Bool) -> FSM s a -> FSM s b -> FSM s (a, b)
+opFSM :: (Ord a, Ord b) => (Bool -> Bool -> Bool) -> FSM a -> FSM b -> FSM (a, b)
 opFSM op (s1, d1, fs1) (s2, d2, fs2) = ((s1, s2), d', fs) where
   d' (q1, q2) a = (d1 q1 a, d2 q2 a)
   fs (q1, q2) = fs1 q1 `op` fs2 q2
 
--- Reachable states of a NFSM
-nreach :: (HasSigma s, Ord a) => NFSM s a -> [a]
-nreach (ss, d', _) = uclosure ss (\q -> concat $ map (d' q) sigma)
-
--- | Minimization of a deterministic FSM using Moore's partition refinement algorithm.
+-- | Minimization of a deterministic FSM. Requires sigma.
 -- Implemented via backward reachability on the product machine (finding distinguishable pairs).
 -- This is functionally equivalent to Hopcroft's n log n algorithm but O(n^2) due to fixpoint computation.
-minimize :: (HasSigma s, Ord a) => FSM s a -> FSM s [a]
-minimize m@(s1, d1, fs1) = (s, d', fs) where
-  qs = reachable m
+minimize :: (Ord a) => [Char] -> FSM a -> FSM [a]
+minimize sigma m@(s1, d1, fs1) = (s, d', fs) where
+  qs = reachable sigma m
   
   -- 1. Identify distinguishable pairs (differing in finality)
   d0 = [(p,q) | p <- qs, q <- qs, fs1 p /= fs1 q]
   
   -- Reverse transition map for M
-  (_, d_rev_m, _) = reverseFSM m 
+  (_, d_rev_m, _) = reverseFSM sigma m 
   
   -- Reverse transition for pairs (conceptually reversing the product machine)
   -- (p',q') -> (p,q) if p' -> p and q' -> q
@@ -163,21 +155,21 @@ minimize m@(s1, d1, fs1) = (s, d', fs) where
 
 -- | Solves a system of linear regular expression equations of the form:
 -- X_i = (A_i1 . X_1) + ... + (A_in . X_n) + B_i
--- Uses the "Sixes and Sevens" elimination method (Gaussian elimination).
-solve :: (Eq s) => [[RegExp s]] -> [RegExp s] -> [RegExp s]
+-- Uses Gaussian elimination
+solve :: [[RegExp]] -> [RegExp] -> [RegExp]
 solve [] [] = []
 solve ((a11:a1J) : rows) (b1:bs) = x1 : xRest
   where
     -- Pivot: A_11*
     s11 = mkStar a11
 
-    -- Update remaining matrix (The "Sixes"): A'_ij = A_ij + (A_i1 . s11 . A_1j)
+    -- Update remaining matrix: A'_ij = A_ij + (A_i1 . s11 . A_1j)
     rows' = zipWith updateRow rows (map head rows)
       where
         -- row is A_i2...A_in, ai1 is the coefficient for the eliminated variable
         updateRow row ai1 = zipWith (\aij a1j -> aij <+> (ai1 <.> s11 <.> a1j)) (tail row) a1J
 
-    -- Update remaining constants (The "Sevens"): B'_i = B_i + (A_i1 . s11 . B_1)
+    -- Update remaining constants: B'_i = B_i + (A_i1 . s11 . B_1)
     bs' = zipWith (\bi ai1 -> bi <+> (ai1 <.> s11 <.> b1)) bs (map head rows)
 
     -- Recursively solve the smaller system
@@ -187,21 +179,20 @@ solve ((a11:a1J) : rows) (b1:bs) = x1 : xRest
     -- Note: We use foldr to sum the dot product.
     sum_a1j_xj = foldr (<+>) Zero (zipWith (<.>) a1J xRest)
     x1 = s11 <.> (b1 <+> sum_a1j_xj)
-solve _ _ = error "solve: mismatched or empty system"
+solve _ _ = error "solve: mismatched system"
 
--- Helper for finding index of an element
+-- Helper for finding index of an element (assumes existence)
 index :: Eq a => a -> [a] -> Int
 index x (y:ys) 
   | x == y    = 0
   | otherwise = 1 + index x ys
 index _ [] = error "State not found in reachable set"
 
--- | Convert FSM to RegExp.
--- Assumes the alphabet 'sigma' is provided (via HasSigma instance).
-fsm_to_re :: (HasSigma s, Ord a) => FSM s a -> RegExp s
-fsm_to_re m@(s, d, fs) = solution !! index s qs
+-- | Convert FSM to RegExp. Requires sigma.
+fsm_to_re :: (Ord a) => [Char] -> FSM a -> RegExp
+fsm_to_re sigma m@(s, d, fs) = solution !! index s qs
   where
-    qs = reachable m
+    qs = reachable sigma m
     
     -- Build the coefficient matrix A
     -- A_ij = Sum of chars c such that d(q_i, c) = q_j

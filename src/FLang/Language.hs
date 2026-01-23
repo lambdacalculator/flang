@@ -5,31 +5,12 @@ import FLang.LOL
 
 ---------------- Languages ----------------------------------------------------
 
--- | The HasSigma typeclass defines the alphabet for a type 's'.
--- The 'sigma' method returns the complete list of characters in this alphabet.
---
--- Example Usage (using "abc" instead of default "ab"):
---   newtype ABC = ABC Char deriving (Eq, Ord, Show)
---   instance HasSigma ABC where
---     sigma = map ABC "abc"
-class (Eq s, Ord s) => HasSigma s where
-  sigma :: [s]
-
 -- | Type for the alphabet {a, b}
-newtype AB = AB Char deriving (Eq, Ord, Show)
 
-instance HasSigma AB where
-  sigma = [AB 'a', AB 'b']
-
--- | Type for the alphabet {a, b, c}
-newtype ABC = ABC Char deriving (Eq, Ord, Show)
-
-instance HasSigma ABC where
-  sigma = [ABC 'a', ABC 'b', ABC 'c']
 
 -- | Languages over an alphabet 'a', represented as normalized lists of LOLs.
 --
--- Invariant: @xs :: Lang a@ implies @xs@ is sorted with no duplicates.
+-- Invariant: @xs :: Lang a@ implies @xs@ is sorted with no duplicates
 type Lang a = [LOL a]
 
 -- Smart constructor for (finite) languages, establishes invariant
@@ -69,8 +50,7 @@ kstar xs = eps : cat xs (kstar xs)
 
 
 -- All strings of length <= n over sigma, in LOL order. Useful for testing
--- All strings of length <= n over sigma, in LOL order. Useful for testing
-strings :: (HasSigma s) => Int -> [[s]]
-strings n = concat [strs i | i <- [0..n]] where
+strings :: [s] -> Int -> [[s]]
+strings sigma n = concat [strs i | i <- [0..n]] where
   strs 0 = [[]]
   strs k = [a:xs | a <- sigma, xs <- strs (k-1)]
