@@ -102,6 +102,23 @@ prop_abc = forAll (resize 5 (sized arbRegExpABC)) $ \r ->
       qs = reachable "abc" m
   in length qs >= 0
 
+-- 8. Validation Test
+prop_validate_valid :: Property
+prop_validate_valid = forAll shortGen $ \(r, _) -> ioProperty $ do
+  let m = brzozowski r
+  -- Valid machines should pass validation with sufficient depth
+  validate 100 "ab" m
+
+prop_validate_depth :: Property
+prop_validate_depth = ioProperty $ do
+  -- A machine with a long chain: 0->1->2->3...
+  let chain :: FSM Int
+      chain = (0, \q _ -> q + 1, \_ -> False)
+  -- Should fail validation if depth < chain length needed (effectively infinite here for finite depth)
+  res <- validate 5 "a" chain
+  return (not res)
+
+
 
 -- Main
 main :: IO ()
@@ -128,5 +145,10 @@ main = do
 
   putStrLn "7. Custom Alphabet (ABC)..."
   quickCheck prop_abc
+
+  putStrLn "8. Validation..."
+  quickCheck prop_validate_valid
+  quickCheck prop_validate_depth
+
   
   putStrLn "Done."

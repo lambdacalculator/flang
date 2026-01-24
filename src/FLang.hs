@@ -6,7 +6,9 @@ module FLang
   , match3
     -- * Finite State Machines
   , FSM, NFSM, EFSM
+  , Machine(..), validate
   , reachable, minimize, intify, nreachable
+
   , toDot
     -- * Algorithms
   , brzozowski

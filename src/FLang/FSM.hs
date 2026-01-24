@@ -1,32 +1,83 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module FLang.FSM 
   ( buildTable -- Export helper for completeness/debugging
   , formatTable
   , FSM
   , reachable
-  , display
   , toDot
+
   , star
   , accept
   , intify
   , NFSM
   , nreachable
-  , displayN
+
   , toDotN
   , hat
   , nacc
 
+
   , EFSM
   , ereachable
+  -- * Generic Machine Class
+  , Machine(..)
+  , validate
   ) where
 
-
-import FLang.Utils (uclosure, norm, overlap)
+import FLang.Utils (uclosure, norm)
 import Data.List (intercalate, transpose, foldl')
 import Data.Array (listArray, (!))
+import Control.Exception (evaluate, try, ErrorCall)
+
+---------------- Generic Machine Class ----------------------------------------------------
+
+-- | A generic interface for finite state machines.
+--   'm' is the machine type, 'a' is the state type.
+class Machine m a | m -> a where
+  -- | Initial states of the machine
+  starts :: m -> [a]
+  -- | Transition function: given a state and input char, return reachable states
+  next   :: m -> a -> Char -> [a]
+  -- | Epsilon transitions: given a state, return states reachable via epsilon
+  epsilon :: m -> a -> [a]
+  -- | Final state predicate
+  accepts :: m -> a -> Bool
+  -- | Display the machine (requires sigma)
+  display :: [Char] -> m -> String
+
+-- | Validate a machine:
+-- 1. Check boundedness (reachability within maxDepth).
+-- 2. Check completeness (no missing transitions for sigma).
+-- Returns True if valid, False if incomplete or infinite.
+validate :: (Machine m a, Ord a) => Int -> [Char] -> m -> IO Bool
+validate maxDepth sigma m = tryAll (starts m) [] 0
+  where
+    tryAll [] _ _ = return True
+    tryAll _ _ k | k > maxDepth = return False -- Bound exceeded
+    tryAll (q:qs) visited k
+      | q `elem` visited = tryAll qs visited k
+      | otherwise = do
+          -- Check transitions for all chars in sigma
+          validMoves <- tryTransitions q sigma
+          if not validMoves then return False
+          else do
+             -- Collect next states
+             let nexts = concat [next m q c | c <- sigma]
+             let epss  = epsilon m q
+             tryAll (qs ++ nexts ++ epss) (q:visited) (k+1)
+
+    tryTransitions (q :: a) chars = do
+      result <- try (evaluate $ foldl' (\acc c -> acc ++ next m q c) [] chars) :: IO (Either ErrorCall [a])
+      case result of
+        Left _ -> return False
+        Right _ -> return True
+
+
 
 
 ---------------- Finite State Machines ----------------------------------------------------
@@ -48,9 +99,17 @@ star = foldl'
 accept :: FSM a -> String -> Bool
 accept (s, d, fs) w = fs (star d s w)
 
+instance (Ord a, Show a) => Machine (FSM a) a where
+  starts (s, _, _) = [s]
+  next (_, d, _) q c = [d q c]
+  epsilon _ _ = []
+  accepts (_, _, fs) q = fs q
+  display = displayFSM
+
+
 -- Intify: Change the states of an FSM from an equality type to Int,
 -- and use an array lookup for the transition function
-intify :: forall a. (Ord a) => [Char] -> FSM a -> FSM Int
+intify :: (Ord a) => [Char] -> FSM a -> FSM Int
 intify sigma m@(s, d, fs) = (s', d', fs') where
   qs = reachable sigma m
   n = length qs
@@ -76,9 +135,18 @@ nreachable sigma (ss, d, _) = uclosure ss (\q -> concat $ map (d q) sigma)
 hat :: Ord a => (a -> Char -> [a]) -> ([a] -> Char -> [a])
 hat d xs a = FLang.Utils.norm $ concat [d q a | q <- xs]
 
--- | Check if an NFSM accepts a string.
+-- | Check if an NFSM accepts a string (efficient version).
 nacc :: (Ord a) => NFSM a -> String -> Bool
 nacc (ss, d, fs) w = any fs (star (hat d) ss w)
+
+
+instance (Ord a, Show a) => Machine (NFSM a) a where
+  starts (ss, _, _) = ss
+  next (_, d, _) q c = d q c
+  epsilon _ _ = []
+  accepts (_, _, fs) q = fs q
+  display = displayNFSM
+
 
 
 -- | Nondeterministic FSMs with epsilon moves.
@@ -90,11 +158,20 @@ type EFSM a = ([a], a -> Char -> [a], [(a,a)], a -> Bool)
 ereachable :: (Ord a) => [Char] -> EFSM a -> [a]
 ereachable sigma (ss, d, es, _) = uclosure ss (\q -> (concat $ map (d q) sigma) ++ [q2 | (q1,q2) <- es, q1==q])
 
+instance (Ord a, Show a) => Machine (EFSM a) a where
+  starts (ss, _, _, _) = ss
+  next (_, d, _, _) q c = d q c
+  epsilon (_, _, es, _) q = [q2 | (q1, q2) <- es, q1 == q]
+  accepts (_, _, _, fs) q = fs q
+  display _ (_, _, _, _) = 
+    "EFSM Display Not Implemented Yet (use FSM/NFSM display or implement displayE)"
+
+
 
 ---------------- Display and Visualization -----------------------------------------
 
-display :: (Ord a, Show a) => [Char] -> FSM a -> String
-display sigma m@(s, d, fs) = unlines $
+displayFSM :: (Ord a, Show a) => [Char] -> FSM a -> String
+displayFSM sigma m@(s, d, fs) = unlines $
   [ "States: " ++ show states
   , "Start: " ++ show s
   , "Finals: " ++ show finals
@@ -119,8 +196,8 @@ toDot sigma m@(s, d, fs) = unlines $
     transitions = [ "  " ++ show q1 ++ " -> " ++ show (d q1 a) ++ " [label=\"" ++ show a ++ "\"];" 
                   | q1 <- states, a <- sigma ]
 
-displayN :: (Ord a, Show a) => [Char] -> NFSM a -> String
-displayN sigma m@(ss, d, fs) = unlines $
+displayNFSM :: (Ord a, Show a) => [Char] -> NFSM a -> String
+displayNFSM sigma m@(ss, d, fs) = unlines $
   [ "States: " ++ show states
   , "Starts: " ++ show ss
   , "Finals: " ++ show finals
