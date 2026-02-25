@@ -62,7 +62,7 @@ instance Show Compact where    -- use precedence to minimize parentheses
   showsPrec p (Compact r) = sp p r where
     sp _ Zero          = showString "0"
     sp _ One           = showString "1"
-    sp _ (Let c)       = shows c
+    sp _ (Let c)       = showChar c
     sp d (Union r1 r2) = showParen (d > 6) $  -- prec(Union) = 6
                          sp 6 r1 .
                          showString "+" .

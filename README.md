@@ -118,46 +118,45 @@ cabal test
 
 ## 👩‍💻 Using FLang in Assignments
 
-You don't need to write your code inside this repository! You can keep your assignments separate while still using the FLang library.
+You don't need to write your code inside this repository! FLang can be installed globally so you can use it from any folder on your computer.
 
-### Method for Assignments (The "Environment File" Method)
+### Installation
 
-This is the most robust way to work on assignments. It creates a configuration file that lets you use plain `ghci` with FLang pre-loaded.
+To install FLang globally on your system:
 
-1.  **Create your folder**: Make a directory for your assignment (e.g., `my-assignment`) alongside your `flang` clone.
-2.  **Point to FLang**: Inside `my-assignment`, create a file named `cabal.project` containing:
-    ```
-    packages: .
-              ../flang
-    ```
-    *(Adjust `../flang` if your directories are organized differently. Windows users: use forward slashes `/` or double backslashes `\\`)*
-3.  **Generate Environment**: Open your terminal in `my-assignment` and run:
-    ```bash
-    cabal install --lib flang --package-env .
-    ```
-    *(This creates a hidden `.ghc.environment...` file)*
-4.  **Work**: Now you can simply run `ghci`!
-    ```bash
-    $ ghci
-    GHCi> import FLang
-    GHCi> :load Assignment.hs
-    ```
+1.  **Clone the repository**: `git clone https://github.com/lambdacalculator/flang.git`
+2.  **Navigate into the folder**: `cd flang`
+3.  **Install the library**: `cabal install --lib .`
 
-**Troubleshooting**:
-*   If you see "can't find file", make sure you are in the correct directory.
-*   If `import FLang` fails, delete the `.ghc.environment` file and run step 3 again.
-*   **Do not** use `cabal repl flang` (this opens the library itself, not your assignment). Just use `ghci`.
+*(Note: this installs the library into your user-level Cabal environment, not system-wide)*
 
-## 🔄 Updating the Library
+### Working on Assignments
 
-If your instructor pushes updates to FLang, getting them is easy:
+Once installed, you can create a new folder anywhere for your assignments (e.g., `~/119/my-assignment`). Inside your assignment file (e.g., `Assign1.hs`), simply include the import statement at the top:
 
-1.  Navigate to your `flang` folder: `cd flang`
-2.  Pull the latest changes: `git pull`
-3.  (Optional) If new files were added, you might need to refresh your environment in your assignment folder:
-    ```bash
-    cd ../my-assignment
-    rm .ghc.environment*  # Delete the old environment file
-    cabal install --lib flang --package-env .
-    ```
+```haskell
+module Assign1 where
+
+import FLang
+```
+
+You can then open your terminal in that folder and load your file directly:
+
+```bash
+$ ghci Assign1.hs
+```
+
+### 🔄 Updating the Library
+
+If your instructor pushes updates to FLang, getting them is easy. We have provided a script that pulls the latest code and reinstalls the library for you.
+
+Simply navigate to your cloned `flang` folder and run the update script:
+
+```bash
+cd flang
+./update.sh
+```
+
+*(Alternatively, you can manually run `git pull` followed by `cabal install --lib .`)*
+
 
