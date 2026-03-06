@@ -308,18 +308,24 @@ runmp (Try mp1 mp2) w = runmp mp1 w || runmp mp2 w
 
 -- | Compile a regular expression to a matching program with loops.
 compile :: RegExp -> MProg
-compile r = go r Epsilon where
-  -- go r mp is the program that matches r and then runs mp on what's left
-  -- uses nep in Star case to avoid infinite loops
-  go :: RegExp -> MProg -> MProg
-  go Zero _ = Fail
-  go One mp = mp
-  go (Let a) mp = Read a mp
-  go (Union r1 r2) mp = Try (go r1 mp) (go r2 mp)
-  go (Cat r1 r2) mp = let mp2  = go r2 mp
-                          mp12 = go r1 mp2
-                      in if byp r1 then Try mp12 mp2 else mp12
-  go (Star Zero) mp = mp   -- Star Zero is One, which does nothing in compiled output
-  go (Star One) mp = mp    -- Star One is One
-  go (Star r1) mp = let loop = Try mp (go (nep r1) loop)
-                    in loop
+compile r = go r Epsilon Epsilon where
+  -- go r mp mpR is the program that matches r and then runs:
+  --   mp  if r matched the empty string
+  --   mpR if r consumed at least one character
+  go :: RegExp -> MProg -> MProg -> MProg
+  go Zero _ _ = Fail
+  go One mp _ = mp
+  go (Let a) _ mpR = Read a mpR
+  go (Union r1 r2) mp mpR = Try (go r1 mp mpR) (go r2 mp mpR)
+  go (Cat r1 r2) mp mpR = 
+    let r2_eps  = go r2 mp mpR
+        r2_read = go r2 mpR mpR
+    in go r1 r2_eps r2_read
+  go (Star Zero) mp _ = mp
+  go (Star One) mp _ = mp
+  go (Star r1) mp mpR = 
+    let loop_r = Try mpR bodyR
+        -- The body MUST consume at least one character, 
+        -- so its empty string continuation (mp) is Fail!
+        bodyR  = go r1 Fail loop_r
+    in Try mp bodyR
