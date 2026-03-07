@@ -1,6 +1,6 @@
 cabal-version:       2.4
 name:                flang
-version:             0.1.0.0
+version:             0.1.1.0
 synopsis:            Formal Languages and Automata Library
 description:         A pedagogical library for exploring Formal Languages, Regular Expressions, and Automata.
                      Features include Brzozowski derivatives with ACUI normalization and FSM conversion via Arden's Lemma.
