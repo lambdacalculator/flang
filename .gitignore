@@ -1,0 +1,10 @@
+dist-newstyle
+*.o
+*.hi
+*.dump-hi
+.cabal-sandbox
+cabal.sandbox.config
+.DS_Store
+private/
+secrets/
+*.swp
