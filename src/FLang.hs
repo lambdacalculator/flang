@@ -10,7 +10,7 @@ module FLang
   , Machine(..), FSM, NFSM, EFSM
   , accept, nacc
   , reachable, nreachable, ereachable, validate, intify
-  , toDot, toDotN, buildTable, formatTable
+  , toDot, toDotN, toDotE, buildTable, formatTable
   , hat, star
   
     -- * Core Algorithms

@@ -24,6 +24,7 @@ module FLang.FSM
 
   , EFSM
   , ereachable
+  , toDotE
   -- * Generic Machine Class
   , Machine(..)
   , validate
@@ -163,8 +164,7 @@ instance (Ord a, Show a) => Machine (EFSM a) a where
   next (_, d, _, _) q c = d q c
   epsilon (_, _, es, _) q = [q2 | (q1, q2) <- es, q1 == q]
   accepts (_, _, _, fs) q = fs q
-  display _ (_, _, _, _) = 
-    "EFSM Display Not Implemented Yet (use FSM/NFSM display or implement displayE)"
+  display = displayEFSM
 
 
 
@@ -249,3 +249,30 @@ formatTable t =
     separator = replicate totalWidth '-'
   in
     formatRow (head t) : separator : map formatRow (tail t)
+
+displayEFSM :: (Ord a, Show a) => [Char] -> EFSM a -> String
+displayEFSM sigma m@(ss, d, es, fs) = unlines $
+  [ "States: " ++ show states
+  , "Starts: " ++ show ss
+  , "Finals: " ++ show finals
+  , "Epsilon Moves: " ++ show es
+  , "Transition Table:"
+  ] ++ formatTable (buildTable sigma states d)
+  where
+    states = ereachable sigma m
+    finals = filter fs states
+
+toDotE :: (Ord a, Show a) => [Char] -> EFSM a -> String
+toDotE sigma m@(ss, d, es, fs) = unlines $
+  [ "digraph EFSM {"
+  , "  rankdir=LR;"
+  , "  node [shape = doublecircle]; " ++ unwords (map show finals) ++ ";"
+  , "  node [shape = circle];"
+  ] ++ startArrows ++ transitions ++ epsilonTransitions ++ ["}"]
+  where
+    states = ereachable sigma m
+    finals = filter fs states
+    startArrows = [ "  secret_start_" ++ show q ++ " [style=invis, shape=point]; secret_start_" ++ show q ++ " -> " ++ show q ++ ";" | q <- ss ]
+    transitions = [ "  " ++ show q1 ++ " -> " ++ show q2 ++ " [label=\"" ++ show a ++ "\"];" 
+                  | q1 <- states, a <- sigma, q2 <- d q1 a ]
+    epsilonTransitions = [ "  " ++ show q1 ++ " -> " ++ show q2 ++ " [label=\"ε\"];" | (q1, q2) <- es ]
