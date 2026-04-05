@@ -5,6 +5,6 @@ echo "Pulling latest changes from GitHub..."
 git pull
 
 echo "Re-installing the library globally..."
-cabal install --lib .
+cabal install --lib . --force-reinstalls --overwrite-policy=always
 
 echo "Update complete! You can now use 'import FLang' in GHCi from any directory."
