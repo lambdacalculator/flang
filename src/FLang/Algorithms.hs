@@ -81,7 +81,7 @@ glushkov r = (ss, d_final, fs) where
 -- Uses the smart left quotient (<\>) to ensure the state space is finite.
 brzozowski :: RegExp -> FSM RegExp
 brzozowski r = (s, d, fs) where
-  s = r
+  s = RE.simp r
   fs = RE.byp
   d = flip (RE.<\>)
 

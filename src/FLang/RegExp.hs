@@ -24,6 +24,7 @@ module FLang.RegExp
   , mkUnion, (<+>)
   , mkCat, (<.>)
   , mkStar
+  , simp
   , match1
   , match2
   , match3
@@ -48,7 +49,27 @@ data RegExp = Zero                 -- ^ Empty language
             | Union RegExp RegExp  -- ^ Union
             | Cat RegExp RegExp    -- ^ Concatenation
             | Star RegExp          -- ^ Kleene star
-            deriving (Show, Eq, Ord)
+            deriving (Eq, Ord)
+
+data RegExpF e = ZeroF
+               | OneF
+               | LetF Char
+               | UnionF e e
+               | CatF e e
+               | StarF e
+               deriving (Functor, Foldable, Generic1, CyclicPrint)
+
+instance MuRef RegExp where
+  type DeRef RegExp = RegExpF
+  mapDeRef _ Zero = pure ZeroF
+  mapDeRef _ One = pure OneF
+  mapDeRef _ (Let c) = pure (LetF c)
+  mapDeRef f (Union p q) = UnionF <$> f p <*> f q
+  mapDeRef f (Cat p q) = CatF <$> f p <*> f q
+  mapDeRef f (Star p) = StarF <$> f p
+
+instance Show RegExp where
+  show = cyclicShow
 
 -- Compact display form for RegExp
 newtype Compact = Compact RegExp
@@ -118,16 +139,21 @@ mkUnion p q = case p of
     Union a b -> mkUnion a (mkUnion b q)
     _         -> insert p q
 
--- | Helper: Inserts 'p' into 'q' only if not physically present in the spine.
--- This guarantees A+B+A -> A+B without requiring a full sort.
+-- | Helper: Inserts 'p' into 'q' maintaining a sorted, right-associated spine.
+-- This guarantees A+B+A -> A+B and canonical ordering (B+A -> A+B).
 insert :: RegExp -> RegExp -> RegExp
 insert p q =
-  if p == q then q
-  else case q of
+  case q of
     Union a b ->
-      if p == a then q            -- Found match at head
-      else Union a (insert p b)   -- Recurse down the spine
-    _ -> Union p q                -- No match found, prepend
+      case compare p a of
+        EQ -> q
+        LT -> Union p q
+        GT -> Union a (insert p b)
+    _ ->
+      case compare p q of
+        EQ -> q
+        LT -> Union p q
+        GT -> Union q p
 
 -- | Smart Constructor for Concatenation.
 -- Enforces:
@@ -139,6 +165,7 @@ mkCat Zero _ = Zero
 mkCat _ Zero = Zero
 mkCat One q  = q
 mkCat p One  = p
+mkCat (Union a b) q = mkUnion (mkCat a q) (mkCat b q) -- Right-distribute
 mkCat p q =
   case p of
     Cat a b -> mkCat a (mkCat b q) -- Right-associate
@@ -294,3 +321,12 @@ compile r = mpE where
   go (Star r1) mp = (True, m0, m1) where
     m0 = Try mp m1
     (_, _, m1) = go r1 m0
+
+-- | Simplify a regular expression using smart constructors bottom-up.
+simp :: RegExp -> RegExp
+simp Zero = Zero
+simp One = One
+simp (Let c) = Let c
+simp (Union a b) = mkUnion (simp a) (simp b)
+simp (Cat a b) = mkCat (simp a) (simp b)
+simp (Star a) = mkStar (simp a)
